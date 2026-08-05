@@ -1,0 +1,46 @@
+# Release workflow for the PHP SDK (Packagist package `lockally/sdk`).
+#
+# TEMPLATE — inert in this monorepo. Copy to `.github/workflows/publish.yml` in
+# the SDK's own repo (generated `sdk/php/` tree, pushed to
+# github.com/lockallyinc/lockally-php). Tag-driven: push `vX.Y.Z`.
+#
+# Packagist publishes by reading the git tag, so there is no artifact upload —
+# this workflow just pings Packagist to pull the new tag immediately (otherwise
+# it syncs on its own schedule / GitHub webhook).
+#
+# One-time setup:
+#   - Submit the repo once at https://packagist.org/packages/submit
+#   - Add repo secrets PACKAGIST_USERNAME (your Packagist user) and
+#     PACKAGIST_TOKEN (Packagist → Profile → Show API Token). Claude never
+#     handles these. (Or just enable the Packagist GitHub webhook and delete
+#     this workflow — the tag then syncs automatically.)
+name: Update Packagist
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Packagist
+        env:
+          PACKAGIST_USERNAME: ${{ secrets.PACKAGIST_USERNAME }}
+          PACKAGIST_TOKEN: ${{ secrets.PACKAGIST_TOKEN }}
+          # Update THIS repo's package (works for lockally-php, lockally-laravel,
+          # lockally-symfony, …) — not a hardcoded repo.
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          if [ -z "$PACKAGIST_USERNAME" ] || [ -z "$PACKAGIST_TOKEN" ]; then
+            echo "PACKAGIST_USERNAME/PACKAGIST_TOKEN not set — skipping API ping."
+            echo "Packagist will pick up the tag via its scheduled crawl or the GitHub webhook,"
+            echo "or trigger it manually with the 'Update' button on the package page."
+            exit 0
+          fi
+          curl -sf -XPOST -H 'content-type:application/json' \
+            "https://packagist.org/api/update-package?username=${PACKAGIST_USERNAME}&apiToken=${PACKAGIST_TOKEN}" \
+            -d "{\"repository\":{\"url\":\"${REPO_URL}\"}}"
